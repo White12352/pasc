@@ -83,13 +83,7 @@ jobs:
 
       - name: Clean Code
         run: |
-          #rm -f ${SDK_NAME}/package/linux/modules/*
-          #rm -f ${SDK_NAME}/package/kernel/linux/modules/*
-          #grep -lFr '$(call KernelPackage,' ${SDK_NAME}/package/linux | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          #grep -lFr '$(call KernelPackage,' ${SDK_NAME}/package/kernel | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          #find ${SDK_NAME}/target/linux -name 'modules.mk' | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          #grep 'src-git base ' ${SDK_NAME}/feeds.conf.default > ${SDK_NAME}/feeds.conf
-          #grep 'src-git luci ' ${SDK_NAME}/feeds.conf.default >> ${SDK_NAME}/feeds.conf
+          ls -la
           rm -f applications
           git clone --depth 1 -b Official https://github.com/White12352/openwrt-package applications
           rm -rf feeds/luci/applications/luci-app-openclash
@@ -117,33 +111,11 @@ jobs:
           echo "Final feeds.conf:"
           cat ${SDK_NAME}/feeds.conf
 
-      - name: 'Restore feeds from cache'
-        id: feeds-cache
-        uses: actions/cache@v3
-        env:
-          CACHE_NAME: 'feeds-cache'
-        with:
-          path: |
-            ~/openwrt-sdk/feeds/packages
-            ~/openwrt-sdk/feeds/luci
-          key: ${{ env.CACHE_NAME }}-${{ env.SDK_NAME }}-pl-3
-
-      - name: 'Restore staging from cache'
-        id: staging-cache
-        uses: actions/cache@v3
-        env:
-          CACHE_NAME: 'staging-cache'
-        with:
-          path: ~/openwrt-sdk/staging_dir
-          key: ${{ env.CACHE_NAME }}-${{ env.SDK_NAME }}-hht-2
-
       - name: Update feeds
         run: |
           apps="${{ github.event.inputs.applications }}"
           cd ~/openwrt-sdk
           ./scripts/feeds update -a
-          #grep -lFr '$(call KernelPackage,' feeds/base/package/linux | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
-          #grep -lFr '$(call KernelPackage,' feeds/base/package/kernel | xargs -rn1 sed -i 's/ FILES:=/ XFILES:=/g' || true
           patch -d feeds/luci -p1 -f -N -i ${{ github.workspace }}/apps/.github/workflows/luci.patch
           if [ "$apps" = "all" ]; then
             ./scripts/feeds install -a -p apps -d y
@@ -191,15 +163,6 @@ jobs:
           cd ~/openwrt-sdk
           make -j1 V=s download
 
-      - name: 'Restore ccache from cache'
-        id: ccache-cache
-        uses: actions/cache@v3
-        env:
-          CACHE_NAME: 'ccache-cache'
-        with:
-          path: ~/openwrt-sdk/.ccache
-          key: ${{ env.CACHE_NAME }}-${{ env.SDK_NAME }}-2
-
       - name: PreCompile IPKs
         id: precompile
         if: steps.download.outputs.status == 'success'
@@ -220,22 +183,9 @@ jobs:
         if: failure() && steps.download.outputs.status == 'success'
         run: tail -n 200 /tmp/openwrt-sdk-build.log && false
 
-      - name: PreUpload - Clean
-        id: preupload
-        if: steps.precompile.outputs.status == 'success' || steps.compile.outputs.status == 'success'
-        run: |
-          cd ${SDK_NAME}/bin/packages/${SDK_ARCH}
-          rm -rf base luci
-
       - name: Upload bin directory
         uses: actions/upload-artifact@main
         if: steps.precompile.outputs.status == 'success' || steps.compile.outputs.status == 'success'
         with:
           name: ${{ env.SDK_ARCH }}
           path: ${{ env.SDK_NAME }}/bin/packages/${{ env.SDK_ARCH }}
-
-      - name: PreCache - Clean
-        run: |
-          git -C "${SDK_NAME}/feeds/luci" reset --hard HEAD^
-          cd ${SDK_NAME}/staging_dir
-          rm -rf packages target-*
